@@ -8,6 +8,7 @@
 /* FreeRTOS */
 #include <FreeRTOS.h>
 #include <task.h>
+#include <queue.h>
 #include <map>
 #include <EEPROM.h>
 #include <SPI.h>
@@ -45,3 +46,5 @@
 
 // IRQ Pin to attach 
 #define IRQ_PIN 9
+
+#define SERIAL_DEBUG
