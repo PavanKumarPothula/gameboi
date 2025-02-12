@@ -15,7 +15,6 @@
 
 /* TFT */
 #include <TFT_eSPI.h>   //TFT lib
-#include "User_Setup.h" // Pins defs + others
 #include <image.h>      // binary array
 #include <PNGdec.h>     //png read from binary array
 

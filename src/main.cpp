@@ -39,6 +39,7 @@ void TFT_write(void *pvParameters)
     Serial.println("#1::" + String(gp_read.y_pos));
 #endif
     String toDisp = "LOVE YOU, BANGARAM! <3::" + String(gp_read.x_pos) + ":" + String(gp_read.y_pos);
+    spr.fillSprite(TFT_BLACK);
     spr.drawString(toDisp, 0, 0);
     spr.pushSprite(0, 0);
   }
@@ -109,7 +110,7 @@ void gamepad_read(void *pvParameters)
     #endif      
       xQueueSend(graphicUpdateQueue, &current_input, 100 / portTICK_RATE_MS);
     }
-    vTaskDelay(200 / portTICK_RATE_MS);
+    vTaskDelay(100 / portTICK_RATE_MS);
   }
 #ifdef SERIAL_DEBUG
   Serial.println("#2::Exiting gamepad_read task \n");
@@ -140,7 +141,7 @@ void main_init()
   spr.createSprite(240, 180);
   spr.fillSprite(TFT_BLACK);
   spr.setTextColor(TFT_GREEN);  
-  
+
 #ifdef SERIAL_DEBUG
   Serial.println("MAIN::===TFT Init Done");
 #endif
