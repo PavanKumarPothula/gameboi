@@ -12,17 +12,20 @@
 #include <map>
 #include <EEPROM.h>
 #include <SPI.h>
+#include <lvgl.h>
 
 /* TFT */
 #include <TFT_eSPI.h>   //TFT lib
 #include <image.h>      // binary array
-#include <PNGdec.h>     //png read from binary array
+// #include <PNGdec.h>     //png read from binary array
 
 // Origin for Image disp
 #define IMAGE_XPOS ((uint16_t)0)
 #define IMAGE_YPOS ((uint16_t)20)
 #define MAX_IMAGE_WIDTH 240
-
+#define TFT_HOR_RES 240   
+#define TFT_VER_RES 320
+#define TFT_ROTATION LV_DISPLAY_ROTATION_0
 /* GamePad Library */
 #include <Adafruit_seesaw.h>
 
@@ -48,9 +51,10 @@
 
 #define SERIAL_DEBUG
 
-
+#define INIT_BODY_LENGTH 5
 typedef struct
 {
+  bool  isUpdated = false;
   int16_t x_pos = X_REF;
   int16_t y_pos = X_REF;
   bool button_A = false;
@@ -60,6 +64,13 @@ typedef struct
   bool button_SRT = false;
   bool button_SEL = false;
 } gamepad_input;
+
+typedef struct
+{
+  int16_t pixelX = 0;
+  int16_t pixelY = 0;
+} snakePart;
+
 
 bool operator==(const gamepad_input& lhs, const gamepad_input& rhs)
 {
@@ -75,10 +86,13 @@ bool operator==(const gamepad_input& lhs, const gamepad_input& rhs)
     );  
 }
 
+
+
 String prettify (const gamepad_input x)
 {
   return (
-              " X: " + String(x.x_pos) 
+          " isUpdated: " + String(x.isUpdated) 
+          + "\n X: " + String(x.x_pos) 
           + "\n Y: " + String(x.y_pos) 
           + "\n Button A:   " +String(x.button_A)  
           + "\n Button B:   " + String(x.button_B) 
@@ -87,4 +101,13 @@ String prettify (const gamepad_input x)
           + "\n Button SEL: " + String(x.button_SEL) 
           + "\n Button SRT: " + String(x.button_SRT)
   );
+}
+
+
+
+
+/*use Arduinos millis() as tick source*/
+static uint32_t my_tick(void)
+{
+    return millis();
 }
