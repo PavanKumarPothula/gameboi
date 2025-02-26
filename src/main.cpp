@@ -1,34 +1,34 @@
 #include <main.hpp>
 
+/* LVGL */
+lv_display_t *disp;
+lv_obj_t *screen;
 
-// TFT inits
-TFT_eSPI tft = TFT_eSPI();
-TFT_eSprite spr = TFT_eSprite(&tft);
-
-// LVGL
 /*LVGL draw into this buffer, 1/10 screen size usually works well. The size is in bytes*/
 #define DRAW_BUF_SIZE (TFT_HOR_RES * TFT_VER_RES / 10 * (LV_COLOR_DEPTH / 8))
 uint32_t draw_buf[DRAW_BUF_SIZE / 4];
 
-// Adafruit Seesaw inits
+/* Adafruit Seesaw inits */
 Adafruit_seesaw ss;
 
 xQueueHandle graphicUpdateQueue;
 
-// TFT write
+/* TFT write */
 void TFT_write(void *pvParameters)
 {
-  static gamepad_input gp_read;
+  static gamepad_input_t gp_read;
 
-  // Queue of parts from tail to head.
-  static std::deque<snakePart> snakeBody({
-      {50, 10},
-      {50, 11},
-      {50, 12},
-      {50, 13},
-      {50, 14},
-  });
-  // If nothing updates, the snake moves along the same direction (Right by default).
+  /* Queue of parts from tail to head. */
+  static std::deque<lv_point_precise_t> snake_body = {
+      {TFT_HOR_RES / 2, (TFT_VER_RES / 2)},
+      {TFT_HOR_RES / 2, (TFT_VER_RES / 2) + 20},
+      {TFT_HOR_RES / 2, (TFT_VER_RES / 2) + 40},
+  };
+
+  drawSnake(snake_body);
+
+
+  /* If nothing updates, the snake moves along the same direction (Right by default). */
   static int8_t XDirection = 1;
   static int8_t YDirection = 0;
 
@@ -62,30 +62,27 @@ void TFT_write(void *pvParameters)
 #endif
 
     String toDisp = String(gp_read.x_pos) + ":" + String(gp_read.y_pos);
-    spr.fillSprite(0x9dcb);
-    spr.setTextColor(TFT_BLACK);
-    spr.drawString(toDisp, 0, 0);
 
-    // Snake Movement
-    // for (uint8_t index = 0; index < snakeBody.size() - 1)
-    //   ; index++)
+    /* Snake Movement */
+    //  for (uint8_t index = 0; index < snake_body.size() - 1; index++)
+    //  {
+    //    snake_body[index].x += (SNAKE_SPEED*XDirection);
+    //    snake_body[index].y += (SNAKE_SPEED*YDirection);
+    //  }
+    lv_point_precise_t tail = snake_body.front();
+    snake_body.pop_front();
+    lv_point_precise_t newHead = snake_body.back();
+    newHead.x += (SNAKE_SPEED * XDirection);
+    newHead.y += (SNAKE_SPEED * YDirection);
+    snake_body.push_back(newHead);
+
+    // for (uint8_t index = 0; index < snake_body.size(); index++)
     // {
-    //   snakeBody[index].pixelX += XDirection;
-    //   snakeBody[index].pixelY += YDirection;
+    //   /* spr.drawPixel(snake_body[index].pixelX, snake_body[index].pixelY, TFT_BLACK); */
     // }
-    // snakePart tail = snakeBody.front();
-    snakeBody.pop_front();
-    snakePart newHead = snakeBody.back();
-    newHead.pixelX += XDirection;
-    newHead.pixelY += YDirection;
-    snakeBody.push_back(newHead);
-
-    for (uint8_t index = 0; index < snakeBody.size(); index++)
-    {
-      spr.drawPixel(snakeBody[index].pixelX, snakeBody[index].pixelY, TFT_BLACK);
-    }
-    spr.pushSprite(0, 0);
-    delay(500);
+    // /* spr.pushSprite(0, 0); */
+    drawSnake(snake_body);
+    delay(1000);
   }
 #ifdef SERIAL_DEBUG
   Serial.println("#1::Exiting TFT_write task \n");
@@ -94,13 +91,13 @@ void TFT_write(void *pvParameters)
 
 void gamepad_read(void *pvParameters)
 {
-  static gamepad_input last_input;
-  // Read and parse the current input of the game pad
+  static gamepad_input_t last_input;
+  /* Read and parse the current input of the game pad */
 #ifdef SERIAL_DEBUG
   Serial.println("#2::Entering gamepad_read task \n");
 #endif
 
-  gamepad_input current_input;
+  gamepad_input_t current_input;
   for (;;)
   {
     int16_t x = X_REF - ss.analogRead(14);
@@ -174,54 +171,65 @@ void gamepad_read(void *pvParameters)
 void main_init()
 {
   lv_init();
-  lv_tick_set_cb(my_tick);
-  lv_display_t *disp = lv_tft_espi_create(TFT_WIDTH, TFT_HEIGHT, draw_buf, sizeof(draw_buf));
+  lv_tick_set_cb(xTaskGetTickCount);
+  disp = lv_tft_espi_create(TFT_WIDTH, TFT_HEIGHT, draw_buf, sizeof(draw_buf));
   lv_display_set_rotation(disp, TFT_ROTATION);
-  lv_obj_t *screen = lv_obj_create(NULL);
-  lv_obj_t *label = lv_label_create( lv_screen_active() );
-  lv_label_set_text( label, "Hello Arduino, I'm LVGL!" );
-  lv_obj_align( label, LV_ALIGN_CENTER, 0, 0 );
-// lv_obj_t *textArea = lv_textarea_create(screen);
-//   const char *strToDisp = "IT JUST WORKS";
-//   lv_textarea_add_text(textArea, strToDisp);
-  // lv_screen_load(screen);
-  lv_timer_handler(); /* let the GUI do its work */
+  lv_display_set_render_mode(disp, LV_DISP_RENDER_MODE_PARTIAL);
+
+  screen = lv_screen_active();
+  // lv_theme_t *th = lv_theme_default_init(disp,                         /* Use DPI, size, etc. from this display */
+  //                                        TFT_BG_COLOR,       /* Primary and secondary palette */
+  //                                        TFT_BG_COLOR,
+  //                                        false, /* Dark theme?  False = light theme. */
+  //                                        &lv_font_montserrat_14        /* Small, normal, large fonts */
+  // );
+
+  // lv_display_set_theme(disp, th); /* Assign theme to display */
+  // static lv_style_t screenStyle;
+  lv_obj_set_style_bg_color(screen, TFT_BG_COLOR, LV_PART_MAIN);
+  // lv_obj_set_style_outline_color(screen, lv_color_black(),LV_PART_MAIN);
+  lv_obj_set_style_outline_width(screen, 4, LV_PART_MAIN);
+  lv_obj_set_style_outline_pad(screen, 2, LV_PART_MAIN);
+  // lv_obj_set_style_outline_pad(screen, 6,LV_PART_MAIN);
+  // lv_obj_add_style(screen, &screenStyle, LV_PART_MAIN);
+  lv_timer_handler();
 
 #ifdef SERIAL_DEBUG
   Serial.begin(115200);
   while (!Serial.available())
   {
   }
+  Serial.readString();
   Serial.println("MAIN::==Setup Start");
 #endif
-  // for blink
+  /* for blink */
   pinMode(LED_BUILTIN, OUTPUT);
 
-// tft
+/* tft */
 #ifdef SERIAL_DEBUG
   Serial.println("MAIN::===TFT Init Start");
 #endif
-  tft.init();
-  tft.setRotation(0);
-  tft.setTextWrap(true, false); // Wrap in x but not y
-  tft.fillScreen(0x9dcb);
-  spr.setTextDatum(TL_DATUM);
-  spr.createSprite(240, 180);
-  // spr.fillSprite(TFT_BLACK);
-  spr.setTextColor(TFT_GREEN);
+  /* tft.init(); */
+  /* tft.setRotation(0); */
+  /* tft.setTextWrap(true, false); /* Wrap in x but not y */
+  /* tft.fillScreen(0x9dcb); */
+  /* spr.setTextDatum(TL_DATUM); */
+  /* spr.createSprite(240, 180); */
+  /* /* spr.fillSprite(TFT_BLACK); */
+  /* spr.setTextColor(TFT_GREEN); */
 
 #ifdef SERIAL_DEBUG
   Serial.println("MAIN::===TFT Init Done");
 #endif
 
-// Seesaw init
+/* Seesaw init */
 #ifdef SERIAL_DEBUG
   Serial.println("MAIN::===Seesaw Init Start");
 #endif
 
   ss.begin(0x50);
   uint32_t version = ((ss.getVersion() >> 16) & 0xFFFF);
-  // Configure pins and attach IRQ
+  /* Configure pins and attach IRQ */
   ss.pinModeBulk(BUTTON_MASK, INPUT_PULLUP);
   ss.setGPIOInterrupts(BUTTON_MASK, 1);
 
@@ -235,7 +243,7 @@ void main_init()
 void setup()
 {
   main_init();
-  graphicUpdateQueue = xQueueCreate(20, sizeof(gamepad_input));
+  graphicUpdateQueue = xQueueCreate(20, sizeof(gamepad_input_t));
   xTaskCreate(gamepad_read,
               "GamePad Read",
               2 * configMINIMAL_STACK_SIZE,
